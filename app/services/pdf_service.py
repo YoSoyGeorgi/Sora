@@ -1,24 +1,119 @@
-import fitz  # PyMuPDF
-import logging
+import os
 from app.dao.pdf_dao import PDFDAO
+from app.dao.APP_SORA import sora
+from app.dto.pdf_response_dto import PDFResponseDTO, ErrorResponse, MismatchResponse, OCROnlyResponse, SuccessResponse
+from cryptography.fernet import Fernet
 
 class PDFService:
     @staticmethod
-    def process_pdf(url: str) -> tuple[str, str]:  # Retorna una tupla con el texto y el nombre del archivo
+    def process_pdf(url: str, api_key:str) -> PDFResponseDTO:
         try:
-            # Descarga el PDF y obtiene el nombre del archivo
-            pdf_data, filename = PDFDAO.download_pdf(url)
+            # Descargar el PDF y obtener el nombre del archivo
+            pdf_bytes_io, filename = PDFDAO.download_pdf(url)
+            print(filename)
+            
+            # Crear una carpeta temporal personalizada en el directorio de trabajo
+            custom_temp_dir = 'temp'
+            if not os.path.exists(custom_temp_dir):
+                os.makedirs(custom_temp_dir)
+            
+            # Definir la ruta del archivo en la carpeta temporal personalizada
+            temp_file_path = os.path.join(custom_temp_dir, filename)
+            
+            # Guardar el archivo en la carpeta temporal personalizada
+            with open(temp_file_path, 'wb') as f:
+                f.write(pdf_bytes_io.getvalue())
 
-            # Procesar el PDF con PyMuPDF
-            with fitz.open(stream=pdf_data, filetype="pdf") as doc:
-                text = ""
-                for page_num in range(len(doc)):
-                    text += doc.load_page(page_num).get_text()
+            # Clave de cifrado compartida
+            key = b'oFf4bo0WC33swZ5OF2AycMzUglVkeTmps7stCJyrmKg='
 
-            logging.debug(f"Extracted text from PDF: {text[:200]}...")  # Muestra un preview del texto
-            logging.info(f"Processed PDF file: {filename}")  # Imprime el nombre del archivo procesado
+            # API key encriptada recibida en el JSON
+            encrypted_api_key = api_key.encode()
 
-            return text, filename  # Retorna el texto y el nombre del archivo
+            # Crea el objeto Fernet con la clave
+            cipher_suite = Fernet(key)
+
+            # Desencripta la API key
+            decrypted_api_key = cipher_suite.decrypt(encrypted_api_key).decode()
+            
+            # Llamar a la función sora con la ruta del archivo temporal
+            check, sat, document = sora(temp_file_path, decrypted_api_key)
+            
+            print(check)
+            print(sat)
+            print(document)
+
+
+            # Validar si el documento es legible y no se pudo obtener información del documento
+            if not check or not sat or not document:
+                return PDFResponseDTO(
+                    Response=ErrorResponse(
+                        status=422,
+                        mensaje='El documento no es legible, por favor sube un documento con mejor calidad e intenta nuevamente'
+                    )
+                )
+
+            # Validar el mismatch (cuando la información del documento no coincide con la del SAT)
+            if check == "SAT<>DOC":
+                return PDFResponseDTO(
+                    Response=MismatchResponse(
+                        status=202,
+                        mensaje='Mismatch',
+                        data={
+                            'documentStatus': 'El documento no coincide con el SAT',
+                            'details': 'La información extraída del documento y del SAT no coinciden en uno o más campos',
+                            'webScrapingData': sat,
+                            'documentData': document
+                        }
+                    )
+                )
+            
+            if check == "file unsoported":
+                return PDFResponseDTO(
+                    Response=ErrorResponse(
+                        status=400,
+                        error='Bad request',
+                        mensaje= "Extensión del archivo inválida. Verifica tu archivo e intenta nuevamente"
+                    )
+                )
+
+            # Si el scraping del SAT no es exitoso, pero el OCR es válido
+            if check == 'SAT no accesible':
+                return PDFResponseDTO(
+                    Response=OCROnlyResponse(
+                        status=201,
+                        mensaje='OCR Only',
+                        data={
+                            'documentStatus': 'Validado sin el servicio del SAT',
+                            'details': 'El servicio de scraping ha fallado o se encuentra no disponible. Validación realizada con OCR',
+                            'documentData': document
+                        }
+                    )
+                )
+
+            # Si todo es exitoso, devolver los resultados correctos
+            return PDFResponseDTO(
+                Response=SuccessResponse(
+                    status=200,
+                    mensaje='Success',
+                    data={
+                        'documentStatus': 'Documento validado',
+                        'details': 'Validación exitosa, el documento está actualizado.',
+                        'documentData': document
+                    }
+                )
+            )
+
         except Exception as e:
-            logging.error(f"Failed to process PDF: {e}")
-            raise Exception(f"Error processing PDF: {e}")
+            return PDFResponseDTO(
+                Response=ErrorResponse(
+                    status=500,
+                    error= "Error desconocido",
+                    mensaje=f"Error processing PDF: {str(e)}"
+                )
+            )
+
+        finally:
+            # Eliminar el archivo temporal
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)

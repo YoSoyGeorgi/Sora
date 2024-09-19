@@ -6,13 +6,7 @@ class PDFDAO:
     @staticmethod
     def download_pdf(url: str):
         try:
-            # Convierte la URL de Google Drive si es necesario
-            if "drive.google.com" in url:
-                file_id = url.split('/d/')[1].split('/')[0]
-                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                url = download_url
-
-            # Descarga el PDF
+            # Descarga el PDF desde el enlace AWS
             response = requests.get(url)
             response.raise_for_status()  # Asegúrate de que no haya errores en la solicitud
 

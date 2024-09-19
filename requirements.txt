@@ -3,3 +3,14 @@ pydantic==2.8.0
 requests==2.32.3
 pymupdf==1.22.5
 mangum
+PyMuPDF
+opencv-python
+numpy
+Pillow
+pytesseract
+PyPDF2
+pyzbar
+beautifulsoup4
+urllib3
+openai
+cryptography
