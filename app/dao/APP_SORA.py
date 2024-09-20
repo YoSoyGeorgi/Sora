@@ -3,7 +3,7 @@ import fitz  # PyMuPDF for PDF manipulation
 import cv2  
 import numpy as np  
 from PIL import Image  
-import pytesseract  
+# import pytesseract  
 import re  
 import unicodedata  
 import base64  
@@ -24,8 +24,7 @@ from openai import OpenAI
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # Set up Tesseract OCR path
-pytesseract.pytesseract.tesseract_cmd = r'./Tesseract/tesseract.exe'
-
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 
 def check_file_type(file_path):
@@ -237,6 +236,7 @@ def parse_sat_data(idCIF, RFC, scrapdata):
 def compare_normalized_fields(dict1, dict2):
     differences = []
     date_fields = ['Fechainiciodeoperaciones', 'Fechadeúltimocambiodeestado']
+    excluded_fields = ['NombreComercial']
     spanish_months = {
         'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
         'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
@@ -263,30 +263,24 @@ def compare_normalized_fields(dict1, dict2):
             except ValueError:
                 return None
     
-    # Get the union of all keys from both dictionaries
     all_fields = set(dict1.keys()).union(set(dict2.keys()))
-    
     for field in all_fields:
+        if field in excluded_fields:
+            continue
         val1 = dict1.get(field, '')
         val2 = dict2.get(field, '')
-        
-        # Check if the field is a date and normalize it
         if field in date_fields:
             norm_val1 = normalize_date(val1)
             norm_val2 = normalize_date(val2)
-        else:
-            # For non-date fields, use the raw values for comparison
-            norm_val1 = val1
-            norm_val2 = val2
-        
-        # Compare the normalized values
+        else:         
+            norm_val1 = val1.replace(" ", "") if isinstance(val1, str) else val1
+            norm_val2 = val2.replace(" ", "") if isinstance(val2, str) else val2
         if norm_val1 != norm_val2:
             differences.append({
                 'Field': field,
                 'Value in dict1': norm_val1,
                 'Value in dict2': norm_val2
             })
-    
     return differences
 
 def rotate_image_pillow(image, angle):
@@ -338,35 +332,12 @@ def extract_and_check_text_from_image(img_cv):
             break
     if bbox is None or data == '':
         return 'QR code not detected', None, None, None, img_cv, None, None, None
-    qr_x, qr_y, qr_width, qr_height = bbox
-    original_qr_coords = (196, 632, 347, 347)
-    original_text_coords = (1310, 500, 1100, 230)
-    delta_x, delta_y = original_text_coords[0] - original_qr_coords[0], original_text_coords[1] - original_qr_coords[1]
-    scale_x, scale_y = qr_width / original_qr_coords[2], qr_height / original_qr_coords[3]
-    text_x, text_y = qr_x + int(delta_x * scale_x), qr_y + int(delta_y * scale_y)
-    bbox_text = (text_x, text_y, int(original_text_coords[2] * scale_x), int(original_text_coords[3] * scale_y))
-    text_x = max(0, text_x)
-    text_y = max(0, text_y)
-    width = int(original_text_coords[2] * scale_x)
-    height = int(original_text_coords[3] * scale_y)
-    max_width = min(width, img_cv.shape[1] - text_x)
-    max_height = min(height, img_cv.shape[0] - text_y)
-    cropped_image = img_cv[text_y:text_y + max_height, text_x:text_x + max_width]
-    img_height, img_width = img_cv.shape[:2]
-    cropped = False
-    x, y, w, h = bbox_text
-    if x < 0 or y < 0 or x + w > img_width or y + h > img_height:
-        cropped = True
-    text_image = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
-    _, text_image2 = cv2.threshold(text_image, 120, 100, cv2.THRESH_BINARY)
-    image = cv2.bitwise_not(text_image2)
-    kernel = np.ones((3, 3), np.uint8)
-    image = cv2.erode(image, kernel, iterations=1)
-    image = cv2.dilate(image, kernel, iterations=1)
-    image = cv2.bitwise_not(image)
-    text = pytesseract.image_to_string(image).strip()
-    check = 'constancia de situacion fiscal' in re.sub(r'[^A-Za-z0-9\s]', '', unicodedata.normalize('NFD', text)).lower()
-    return None, text, data, check, img_cv, bbox, bbox_text, cropped
+    url = 'https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3'
+    check = url in data
+    if check:
+        return None, None, data, check, img_cv, bbox, None, None
+    else:
+        return 'QR no es constacnia fiscal', None, data, check, img_cv, bbox, None, None
 
 def text_for_ai(bbox, img_cv):
     qr_x, qr_y, qr_width, qr_height = bbox
@@ -399,16 +370,18 @@ def encode_image(image_array):
 
 def open_ai(img_cv, API_SORA):
     base64_image = encode_image(img_cv)
-    MODEL="gpt-4o-mini"
+    MODEL="gpt-4o-mini-2024-07-18"
+    # MODEL="gpt-4o-2024-08-06"
     client = OpenAI(api_key=API_SORA)
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that extracts information from Constancia de Situación Fiscal, and you only respond in JSON"},
+            {"role": "system", "content": f"You are a helpful assistant that extracts information from Constancia de Situación Fiscal, and you only respond in JSON"},
             {"role": "user", "content": [
-                {"type": "text", "text": "Return JSON document with the data of the document of constancia de situación fiscal"},
+                {"type": "text", "text": f"Return JSON document with the data of the document of constancia de situación fiscal"},
                 {"type": "image_url", "image_url": {
-                    "url": f"data:image/png;base64,{base64_image}"}
+                    "url": f"data:image/png;base64,{base64_image}",
+                    "detail": "high"}
                 }
             ]}
         ],
@@ -424,7 +397,7 @@ def open_ai(img_cv, API_SORA):
                         "Fechadeúltimocambiodeestado": {"type": "string"},
                         "NombreComercial": {"type": "string"},
                         "Estatusenelpadrón": {"type": "string"},
-                        "CURP": {"type": "string"},
+                        f"CURP": {"type": "string"},
                         "Nombre": {"type": "string"},
                         "PrimerApellido": {"type": "string"},
                         "SegundoApellido": {"type": "string"},
@@ -455,6 +428,7 @@ def open_ai(img_cv, API_SORA):
     return (response.choices[0].message.content)
 
 def sora(file_path, api_key):
+    api_key = api_key
     # print(file_path)
     file_type = check_file_type(file_path)
     # print (file_type)
@@ -489,28 +463,29 @@ def sora(file_path, api_key):
     #contniue
     if error is None:
         error, text, qr, check, img_cv, bbox, bbox_text, cropped = extract_and_check_text_from_image(image)
-        if error is None:
-            # print (qr)
-            # plt.imshow(text_for_ai(bbox,img_cv), cmap='gray')
-            # plt.title(f"Detected Text: {text}")
-            # plt.axis('on')
-            # plt.show()
-
-            ai_text = open_ai(text_for_ai(bbox,img_cv), api_key)
+        if error is None:            
             match = re.search(r"D3=(\d+)_", qr)
             extracted_id = match.group(1)
             ai_text_dict_final = {'CIF':extracted_id }
             match_alphanumeric = re.search(r"D3=\d+_([A-Z0-9]+)", qr)
             extracted_alphanumeric = match_alphanumeric.group(1)
             rfc = {'RFC':extracted_alphanumeric }
+            rfc_shorten = extracted_alphanumeric[:8]
             ai_text_dict_final.update(rfc)
-            ai_text_dict_json = json.loads(ai_text)
-            ai_text_dict_final.update(ai_text_dict_json)
             satscrapp =  (fetch_sat_data(ai_text_dict_final["CIF"],ai_text_dict_final["RFC"]))
             if satscrapp is None:
                 return "SAT no accesible", None, ai_text_dict_final
             else:
                 parse_sat = parse_sat_data(ai_text_dict_final["CIF"],ai_text_dict_final["RFC"],satscrapp)
+                try:
+                    ai_text = open_ai(text_for_ai(bbox, img_cv), API_SORA)
+                    ai_text_dict_json = json.loads(ai_text)
+                    ai_text_dict_final.update(ai_text_dict_json)
+                    curp =  ai_text_dict_final['CURP']
+                    curp = rfc_shorten + curp[8:]
+                    ai_text_dict_final['CURP'] = curp
+                except Exception as e:
+                    return "SAT only, AI error", parse_sat, None
                 if (len(compare_normalized_fields(parse_sat, ai_text_dict_final)))==0:
                     return "SAT=DOC", parse_sat, ai_text_dict_final
                 else:

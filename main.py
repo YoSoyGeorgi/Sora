@@ -9,13 +9,17 @@ from mangum import Mangum
 app = FastAPI()
 handler = Mangum(app)
 
+@app.get("/")
+async def hello():
+    return {"message":"Hola"}
+
 @app.post("/get_pdf_text", response_model=PDFResponseDTO)
 async def get_pdf_text(request: URLRequest):
     try:
         # Llama al servicio para procesar el archivo
         result = PDFService.process_pdf(request.url, request.api_key)
 
-        # Serializar manualmente el resultado excluyendo None
+        # Serializar el resultado completo, sin excluir `None`
         json_compatible_result = jsonable_encoder(result.dict(exclude_none=True))
 
         # Retornar como respuesta JSON

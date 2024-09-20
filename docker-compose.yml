@@ -1,0 +1,9 @@
+version: '3'
+services:
+  fast-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: holayosoygeorgi/sora_test:v1.0  # Añade la imagen con la etiqueta aquí
+    ports:
+      - "5002:80"
