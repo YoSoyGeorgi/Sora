@@ -1,56 +1,47 @@
-import requests
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from io import BytesIO
+from app.dto.pdf_dto import URLRequest
+from app.dto.pdf_response_dto import PDFResponseDTO
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from app.services.pdf_service import PDFService
+from app.services.pdf_service_imss import PDFServiceIMSS
 from mangum import Mangum
-import fitz  # PyMuPDF
+
+
 
 app = FastAPI()
 handler = Mangum(app)
 
-class URLRequest(BaseModel):
-    url: str
+@app.get("/")
+async def hello():
+    return {"message":"Test"}
 
-def convert_drive_url(drive_url):
-    try:
-        # Extrae el ID del archivo de Google Drive
-        file_id = drive_url.split('/d/')[1].split('/')[0]
-        # Convierte la URL a formato de descarga directa
-        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        return download_url
-    except IndexError:
-        raise ValueError("Invalid Google Drive URL format")
-
-@app.post("/get_pdf_text")
+@app.post("/get-sat", response_model=PDFResponseDTO)
 async def get_pdf_text(request: URLRequest):
     try:
-        # Convertir URL de visualización a URL de descarga
-        download_url = convert_drive_url(request.url)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Llama al servicio para procesar el archivo
+        result = PDFService.process_pdf(request.url, request.api_key)
 
-    # Hacer la solicitud GET al enlace de descarga directa
-    response = requests.get(download_url)
+        # Serializar el resultado completo, sin excluir `None`
+        json_compatible_result = jsonable_encoder(result.dict(exclude_none=True))
 
-    # Si la solicitud fue exitosa, procesar el contenido binario del PDF
-    if response.status_code == 200:
-        # Crear un objeto BytesIO a partir del contenido del PDF
-        pdf_bytes = BytesIO(response.content)
-        
-        # Abrir el PDF con PyMuPDF
-        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
-        
-        # Extraer texto de cada página
-        text = ""
-        for page_num in range(len(pdf_document)):
-            page = pdf_document.load_page(page_num)
-            text += page.get_text()
-        
-        # Cerrar el documento
-        pdf_document.close()
-        
-        # Devolver el texto extraído como JSON
-        return {"text": text}
-    else:
-        # Si falla la solicitud, manejar el error
-        raise HTTPException(status_code=response.status_code, detail="No se pudo descargar el archivo o el archivo no existe")
+        # Retornar como respuesta JSON
+        return JSONResponse(content=json_compatible_result)
+
+    except Exception as e:
+        raise HTTPException(statusCode=500, detail=f"Error processing PDF: {str(e)}")
+
+@app.post("/get-imss", response_model=PDFResponseDTO)
+async def get_pdf_text(request: URLRequest):
+    try:
+        # Llama al servicio para procesar el archivo
+        result = PDFServiceIMSS.process_pdf(request.url, request.api_key)
+
+        # Serializar el resultado completo, sin excluir `None`
+        json_compatible_result = jsonable_encoder(result.dict(exclude_none=True))
+
+        # Retornar como respuesta JSON
+        return JSONResponse(content=json_compatible_result)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
