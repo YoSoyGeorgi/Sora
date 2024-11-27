@@ -98,42 +98,42 @@ def parse_pdf_text(extracted_text):
     patterns = {
         "CIF": r"idCIF:\s*(\d+)",
         "RFC": r"RFC:\s*([A-Z0-9]+)",
-        "Fechainiciodeoperaciones": r"Fechainiciodeoperaciones:\s*(.*?)(?=\n)",
-        "Fechadeúltimocambiodeestado": r"Fechadeúltimocambiodeestado:\s*(.*?)(?=\n)",
-        "NombreComercial":r"NombreComercial:\s*(.*?)(?=\n)",
-        "Estatusenelpadrón":r"Estatusenelpadrón:\s*([A-Z\s]+)(?=\n)",
-        "CURP": r"CURP:\s*([A-Z0-9]+)",
-        "Nombre": r"Nombre\(s\):\s*(.*?)(?=\nPrimer)",
-        "PrimerApellido": r"PrimerApellido:\s*(.*?)(?=\nSegundo)",
-        "SegundoApellido": r"Segundo Apellido:\s*(.*?)(?=\nFecha)",
-        "CodigoPostal": r"CódigoPostal:\s*(\d+)",
-        "TipoVialidad": r"TipodeVialidad:\s*(.*?)(?=\nNombre)",
-        "NombreVialidad": r"NombredeVialidad:\s*(.*?)(?=\nNúmero)",
-        "NumeroExterior": r"NúmeroExterior:\s*(.*?)(?=\nNúmero)",
-        "NumeroInterior": r"NúmeroInterior:*(.*?)(?=Nombre)",
-        "NombreColonia": r"NombredelaColonia:\s*(.*?)(?=\nNombre)",
-        "NombreLocalidad": r"NombredelaLocalidad:\s*([A-Z\s]+)(?=\n|Nombre)",
-        "NombreMunicipio": r"NombredelMunicipio oDemarcación Territorial:\s*(.*?)(?=\nNombre)",
-        "NombredelaEntidadFederativa": r"NombredelaEntidadFederativa:\s*(.*?)(?=EntreCalle)"
+        "fechaInicioDeOperaciones": r"Fechainiciodeoperaciones:\s*(.*?)(?=\n)",
+        "fechaDeUltimoCambioDeEstado": r"Fechadeúltimocambiodeestado:\s*(.*?)(?=\n)",
+        "nombreComercial":r"NombreComercial:\s*(.*?)(?=\n)",
+        "estatusEnElPadron":r"Estatusenelpadrón:\s*([A-Z\s]+)(?=\n)",
+        "curp": r"CURP:\s*([A-Z0-9]+)",
+        "nombre": r"Nombre\(s\):\s*(.*?)(?=\nPrimer)",
+        "primerApellido": r"PrimerApellido:\s*(.*?)(?=\nSegundo)",
+        "segundoApellido": r"Segundo Apellido:\s*(.*?)(?=\nFecha)",
+        "codigoPostal": r"CódigoPostal:\s*(\d+)",
+        "tipoVialidad": r"TipodeVialidad:\s*(.*?)(?=\nNombre)",
+        "nombreVialidad": r"NombredeVialidad:\s*(.*?)(?=\nNúmero)",
+        "numeroExterior": r"NúmeroExterior:\s*(.*?)(?=\nNúmero)",
+        "numeroInterior": r"NúmeroInterior:*(.*?)(?=Nombre)",
+        "nombreColonia": r"NombredelaColonia:\s*(.*?)(?=\nNombre)",
+        "nombreLocalidad": r"NombredelaLocalidad:\s*([A-Z\s]+)(?=\n|Nombre)",
+        "nombreMunicipio": r"NombredelMunicipio oDemarcación Territorial:\s*(.*?)(?=\nNombre)",
+        "nombredelaEntidadFederativa": r"NombredelaEntidadFederativa:\s*(.*?)(?=EntreCalle)"
     }
     # Extract the data using the regex patterns
     extracted_data = {}
     for key, pattern in patterns.items():
         match = re.search(pattern, extracted_text, re.DOTALL)
         extracted_data[key] = match.group(1).strip() if match else ""
-    # Fix the issue where NumeroInterior is 'N' (assumed missing value)
-    if extracted_data["NombreComercial"] == 'Datos del domicilio registrado':
-        extracted_data["NombreComercial"] = ""
-    if extracted_data["NumeroInterior"] == 'N':
-        extracted_data["NumeroInterior"] = ""
+    # Fix the issue where numeroInterior is 'N' (assumed missing value)
+    if extracted_data["nombreComercial"] == 'Datos del domicilio registrado':
+        extracted_data["nombreComercial"] = ""
+    if extracted_data["numeroInterior"] == 'N':
+        extracted_data["numeroInterior"] = ""
     # Remove any residual newline characters and extra spaces
     for key in extracted_data:
         extracted_data[key] = ' '.join(extracted_data[key].split())
-    # Add space in NumeroExterior if needed
-    if re.match(r'\d+[A-Z]+', extracted_data["NumeroExterior"]):
-        extracted_data["NumeroExterior"] = re.sub(r'(\d+)([A-Z]+)', r'\1 \2', extracted_data["NumeroExterior"])
-    # Ensure NombreVialidad doesn't contain NúmeroExterior
-    extracted_data["NombreVialidad"] = re.sub(r'\s*NúmeroExterior:.*$', '', extracted_data["NombreVialidad"])
+    # Add space in numeroExterior if needed
+    if re.match(r'\d+[A-Z]+', extracted_data["numeroExterior"]):
+        extracted_data["numeroExterior"] = re.sub(r'(\d+)([A-Z]+)', r'\1 \2', extracted_data["numeroExterior"])
+    # Ensure nombreVialidad doesn't contain NúmeroExterior
+    extracted_data["nombreVialidad"] = re.sub(r'\s*NúmeroExterior:.*$', '', extracted_data["nombreVialidad"])
     # Fix NombreLocalidad to not include NombreMunicipio information
     # nombre_localidad_match = re.search(r"NombredelaLocalidad:\s*(.*?)\s*(?=\nNombredel)", extracted_text, re.DOTALL)
     # if nombre_localidad_match:
@@ -168,23 +168,23 @@ def parse_sat_data(idCIF, RFC, scrapdata):
     result = {
         'CIF': idCIF,
         'RFC': RFC,
-        'Fechainiciodeoperaciones': '',
-        'Fechadeúltimocambiodeestado': '',
-        'NombreComercial': '',
-        'Estatusenelpadrón': '',
-        'CURP': '',
-        'Nombre': '',
-        'PrimerApellido': '',
-        'SegundoApellido': '',
-        'CodigoPostal': '',
-        'TipoVialidad': '',
-        'NombreVialidad': '',
-        'NumeroExterior': '',
-        'NumeroInterior': '',
-        'NombreColonia': '',
-        'NombreLocalidad': '',
-        'NombreMunicipio': '',
-        'NombredelaEntidadFederativa': ''
+        'fechaInicioDeOperaciones': '',
+        'fechaDeUltimoCambioDeEstado': '',
+        'nombreComercial': '',
+        'estatusEnElPadron': '',
+        'curp': '',
+        'nombre': '',
+        'primerApellido': '',
+        'segundoApellido': '',
+        'codigoPostal': '',
+        'tipoVialidad': '',
+        'nombreVialidad': '',
+        'numeroExterior': '',
+        'numeroInterior': '',
+        'nombreColonia': '',
+        'nombreLocalidad': '',
+        'nombreMunicipio': '',
+        'nombredelaEntidadFederativa': ''
     }
     tables = scrapdata.find_all('table', class_='ui-panelgrid')
     for table in tables:
@@ -196,37 +196,37 @@ def parse_sat_data(idCIF, RFC, scrapdata):
                 value = cells[1].text.strip()
                 
                 if 'CURP' in key:
-                    result['CURP'] = value
+                    result['curp'] = value
                 elif 'Nombre' in key and 'Comercial' not in key and 'vialidad' not in key:
-                    if result['Nombre'] == '':  # First 'Nombre' is the person’s name
-                        result['Nombre'] = value
+                    if result['nombre'] == '':  # First 'nombre' is the person’s name
+                        result['nombre'] = value
                 elif 'Apellido Paterno' in key:
-                    result['PrimerApellido'] = value
+                    result['primerApellido'] = value
                 elif 'Apellido Materno' in key:
-                    result['SegundoApellido'] = value
+                    result['segundoApellido'] = value
                 elif 'Fecha de Inicio de operaciones' in key:
-                    result['Fechainiciodeoperaciones'] = value.replace('-', '')
+                    result['fechaInicioDeOperaciones'] = value.replace('-', '')
                 elif 'Fecha del último cambio de situación' in key:
-                    result['Fechadeúltimocambiodeestado'] = value.replace('-', '')
+                    result['fechaDeUltimoCambioDeEstado'] = value.replace('-', '')
                 elif 'Situación del contribuyente' in key:
-                    result['Estatusenelpadrón'] = value
+                    result['estatusEnElPadron'] = value
                 elif 'CP' in key:
-                    result['CodigoPostal'] = value
+                    result['codigoPostal'] = value
                 elif 'Tipo de vialidad' in key:
-                    result['TipoVialidad'] = value
+                    result['tipoVialidad'] = value
                 elif 'Nombre de la vialidad' in key:
-                    result['NombreVialidad'] = value
+                    result['nombreVialidad'] = value
                 elif 'Número exterior' in key:
-                    result['NumeroExterior'] = value
+                    result['numeroExterior'] = value
                 elif 'Número interior' in key:
-                    result['NumeroInterior'] = value
+                    result['numeroInterior'] = value
                 elif 'Colonia' in key:
-                    result['NombreColonia'] = value
+                    result['nombreColonia'] = value
                 elif 'Municipio o delegación' in key:
-                    result['NombreMunicipio'] = value
-                    result['NombreLocalidad'] = value
+                    result['nombreMunicipio'] = value
+                    result['nombreLocalidad'] = value
                 elif 'Entidad Federativa' in key:
-                    result['NombredelaEntidadFederativa'] = value
+                    result['nombredelaEntidadFederativa'] = value
     # Remove extra spaces (but not all spaces)
     for key in result:
         if isinstance(result[key], str):
@@ -235,8 +235,8 @@ def parse_sat_data(idCIF, RFC, scrapdata):
 
 def compare_normalized_fields(dict1, dict2):
     differences = []
-    date_fields = ['Fechainiciodeoperaciones', 'Fechadeúltimocambiodeestado']
-    excluded_fields = ['NombreComercial']
+    date_fields = ['fechaInicioDeOperaciones', 'fechaDeUltimoCambioDeEstado']
+    excluded_fields = ['nombreComercial']
     spanish_months = {
         'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
         'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
@@ -393,30 +393,30 @@ def open_ai(img_cv, API_SORA):
                 "schema": {
                     "type": "object",
                     "properties": {
-                        "Fechainiciodeoperaciones": {"type": "string"},
-                        "Fechadeúltimocambiodeestado": {"type": "string"},
-                        "NombreComercial": {"type": "string"},
-                        "Estatusenelpadrón": {"type": "string"},
-                        f"CURP": {"type": "string"},
-                        "Nombre": {"type": "string"},
-                        "PrimerApellido": {"type": "string"},
-                        "SegundoApellido": {"type": "string"},
-                        "CodigoPostal": {"type": "string"},
-                        "TipoVialidad": {"type": "string"},
-                        "NombreVialidad": {"type": "string"},
-                        "NumeroExterior": {"type": "string"},
-                        "NumeroInterior": {"type": "string"},
-                        "NombreColonia": {"type": "string"},
-                        "NombreLocalidad": {"type": "string"},
-                        "NombreMunicipio": {"type": "string"},
-                        "NombredelaEntidadFederativa": {"type": "string"}
+                        "fechaInicioDeOperaciones": {"type": "string"},
+                        "fechaDeUltimoCambioDeEstado": {"type": "string"},
+                        "nombreComercial": {"type": "string"},
+                        "estatusEnElPadron": {"type": "string"},
+                        f"curp": {"type": "string"},
+                        "nombre": {"type": "string"},
+                        "primerApellido": {"type": "string"},
+                        "segundoApellido": {"type": "string"},
+                        "codigoPostal": {"type": "string"},
+                        "tipoVialidad": {"type": "string"},
+                        "nombreVialidad": {"type": "string"},
+                        "numeroExterior": {"type": "string"},
+                        "numeroInterior": {"type": "string"},
+                        "nombreColonia": {"type": "string"},
+                        "nombreLocalidad": {"type": "string"},
+                        "nombreMunicipio": {"type": "string"},
+                        "nombredelaEntidadFederativa": {"type": "string"}
                     },
                     "required": [
-                        "Fechainiciodeoperaciones", "Fechadeúltimocambiodeestado",
-                        "NombreComercial", "Estatusenelpadrón", "CURP", "Nombre", "PrimerApellido",
-                        "SegundoApellido", "CodigoPostal", "TipoVialidad", "NombreVialidad", "NumeroExterior",
-                        "NumeroInterior", "NombreColonia", "NombreLocalidad", "NombreMunicipio",
-                        "NombredelaEntidadFederativa"
+                        "fechaInicioDeOperaciones", "fechaDeUltimoCambioDeEstado",
+                        "nombreComercial", "estatusEnElPadron", "curp", "nombre", "primerApellido",
+                        "segundoApellido", "codigoPostal", "tipoVialidad", "nombreVialidad", "numeroExterior",
+                        "numeroInterior", "nombreColonia", "nombreLocalidad", "nombreMunicipio",
+                        "nombredelaEntidadFederativa"
                     ],
                     "additionalProperties": False
                 },
@@ -478,12 +478,12 @@ def sora(file_path, api_key):
             else:
                 parse_sat = parse_sat_data(ai_text_dict_final["CIF"],ai_text_dict_final["RFC"],satscrapp)
                 try:
-                    ai_text = open_ai(text_for_ai(bbox, img_cv), API_SORA)
+                    ai_text = open_ai(text_for_ai(bbox, img_cv), api_key)
                     ai_text_dict_json = json.loads(ai_text)
                     ai_text_dict_final.update(ai_text_dict_json)
-                    curp =  ai_text_dict_final['CURP']
+                    curp =  ai_text_dict_final['curp']
                     curp = rfc_shorten + curp[8:]
-                    ai_text_dict_final['CURP'] = curp
+                    ai_text_dict_final['curp'] = curp
                 except Exception as e:
                     return "SAT only, AI error", parse_sat, None
                 if (len(compare_normalized_fields(parse_sat, ai_text_dict_final)))==0:

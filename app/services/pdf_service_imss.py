@@ -1,10 +1,10 @@
 import os
+from app.dao.IMSS_SORA import extract_nss
 from app.dao.pdf_dao import PDFDAO
 from app.dao.APP_SORA import sora
-from app.dto.pdf_response_dto import PDFResponseDTO, ErrorResponse, MismatchResponse, OCROnlyResponse, SuccessResponse
+from app.dto.pdf_response_IMSS_dto import PDFResponseDTO, ErrorResponse, SuccessResponse
 from cryptography.fernet import Fernet
-
-class PDFService:
+class PDFServiceIMSS:
     @staticmethod
     def process_pdf(url: str, api_key:str) -> PDFResponseDTO:
         try:
@@ -39,74 +39,59 @@ class PDFService:
             print("clave desencriptada",decrypted_api_key)
 
 
-            # Llamar a la función sora con la ruta del archivo temporal
-            check, sat, document = sora(temp_file_path, decrypted_api_key)
+            msg, numSS, isValid, othr = extract_nss(temp_file_path, decrypted_api_key)
+
+            print(msg)
+            print(numSS)
+            print(isValid)
+
+
             
-            print(check)
-            print(sat)
-            print(document)
-
-
             # Validar si el documento es legible y no se pudo obtener información del documento
-            if check == "Image is too blurred" and sat == None and document == None:
+            if msg == "Image is too blurred" and numSS == None and isValid == False:
                 return PDFResponseDTO(
                     errorResponse=ErrorResponse(
                         status=422,
+                        error="Image is too blurred",
                         mensaje='El documento no es legible, por favor sube un documento con mejor calidad e intenta nuevamente'
                     )
                 )
-
-            # Validar el mismatch (cuando la información del documento no coincide con la del SAT)
-            if check == "SAT<>DOC":
+            
+            
+            # Validar si el documento es legible y no se pudo obtener información del documento
+            if msg == "Unsupported file type" and numSS == None and isValid == False:
                 return PDFResponseDTO(
-                    mismatchResponse=MismatchResponse(
-                        status=202,
-                        mensaje='Mismatch',
-                        data={
-                            'documentStatus': 'El documento no coincide con el SAT',
-                            'details': 'La información extraída del documento y del SAT no coinciden en uno o más campos',
-                            'webScrapingData': sat,
-                            'documentData': document
-                        }
+                    errorResponse=ErrorResponse(
+                        status=401,
+                        error="Extensión del archivo inválida",
+                        mensaje='Extensión del archivo inválida. Verifica tu archivo e intenta nuevamente'
                     )
                 )
             
-            if check == 'QR code not detected' and sat == None and document == None:
+            # Validar si el documento es legible y no se pudo obtener información del documento
+            if msg == "No se pudo validar el NSS" and numSS == None and isValid == False:
                 return PDFResponseDTO(
                     errorResponse=ErrorResponse(
-                        status=409,
-                        error='Conflict',
-                        mensaje='El documento no coincide con los valores de referencia, sube un documento que cumpla con los valores y por favor intenta nuevamente'
+                        status=402,
+                        error="No se pudo validar el NSS",
+                        mensaje='Se analizó el documento pero este no contiene un Número de Seguridad Social, intente nuevamente con otro archivo'
                     )
                 )
 
-            # Si el scraping del SAT no es exitoso, pero el OCR es válido
-            if check == 'SAT no accesible' and sat == None:
+
+            # Si todo es exitoso, devolver los resultados correctos
+            if numSS != None and isValid == True:
                 return PDFResponseDTO(
-                    ocrOnlyResponse=OCROnlyResponse(
-                        status=201,
-                        mensaje='OCR Only',
+                    successResponse=SuccessResponse(
+                        status=200,
+                        mensaje='Success',
                         data={
-                            'documentStatus': 'Validado sin el servicio del SAT',
-                            'details': 'El servicio de scraping ha fallado o se encuentra no disponible. Validación realizada con OCR',
-                            'documentData': document
+                            'documentStatus': 'Documento validado',
+                            'details': 'El documento cuenta con un Número de Seguridad Social',
+                            'NSS': numSS
                         }
                     )
                 )
-
-            # Si todo es exitoso, devolver los resultados correctos
-            return PDFResponseDTO(
-                successResponse=SuccessResponse(
-                    status=200,
-                    mensaje='Success',
-                    data={
-                        'documentStatus': 'Documento validado',
-                        'details': 'Validación exitosa, el CIF y el RFC concuerdan en el documento y en la página del SAT.',
-                        'webScrapingData': sat,
-                        'documentData': document
-                    }
-                )
-            )
 
         except ValueError as ve:
         # Capturar errores de valor específico
@@ -118,15 +103,7 @@ class PDFService:
                 )
             )
         
-        except UnboundLocalError as ule:
-            # Capturar específicamente el UnboundLocalError
-            return PDFResponseDTO(
-                errorResponse=ErrorResponse(
-                    status=400,
-                    error='Bad request',
-                    mensaje='Extensión del archivo inválida. Verifica tu archivo e intenta nuevamente'
-                )
-            )
+        
         except Exception as e:
             # Capturar cualquier otra excepción
             return PDFResponseDTO(
