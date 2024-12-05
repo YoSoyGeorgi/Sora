@@ -7,6 +7,7 @@ from cryptography.fernet import Fernet
 class PDFService:
     @staticmethod
     def process_pdf(url: str, api_key:str) -> PDFResponseDTO:
+        temp_file_path = None
         try:
             # Descargar el PDF y obtener el nombre del archivo
             pdf_bytes_io, filename = PDFDAO.download_pdf(url)
@@ -127,6 +128,25 @@ class PDFService:
                     mensaje='Extensión del archivo inválida. Verifica tu archivo e intenta nuevamente'
                 )
             )
+        
+        except Exception as e:
+            if "403" in str(e):
+                return PDFResponseDTO(
+                    errorResponse=ErrorResponse(
+                        status=403,
+                        error="Acceso denegado",
+                        mensaje="No se pudo acceder al archivo. Verifica que el enlace sea válido y tenga permisos de acceso."
+                    )
+                )
+            elif "404" in str(e):
+                return PDFResponseDTO(
+                    errorResponse=ErrorResponse(
+                        status=404,
+                        error="Archivo no encontrado",
+                        mensaje="El archivo no existe. Verifica la URL proporcionada."
+                    )
+                )
+
         except Exception as e:
             # Capturar cualquier otra excepción
             return PDFResponseDTO(
@@ -138,6 +158,5 @@ class PDFService:
             )
 
         finally:
-            # Eliminar el archivo temporal
-            if os.path.exists(temp_file_path):
+            if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)

@@ -1,4 +1,5 @@
 import os
+import requests
 from app.dao.IMSS_SORA import extract_nss
 from app.dao.pdf_dao import PDFDAO
 from app.dao.APP_SORA import sora
@@ -7,12 +8,19 @@ from cryptography.fernet import Fernet
 class PDFServiceIMSS:
     @staticmethod
     def process_pdf(url: str, api_key:str) -> PDFResponseDTO:
+        temp_file_path = None
         try:
+
             # Descargar el PDF y obtener el nombre del archivo
             pdf_bytes_io, filename = PDFDAO.download_pdf(url)
             print('Nombre del archivo procesado: ', filename)
 
                        
+            # Validar que el archivo descargado tenga contenido
+            if pdf_bytes_io.getbuffer().nbytes == 0:
+                raise ValueError("El archivo descargado está vacío. Verifica la URL e intenta nuevamente.")
+
+
             # Crear una carpeta temporal personalizada en el directorio de trabajo
             custom_temp_dir = 'temp'
             if not os.path.exists(custom_temp_dir):
@@ -93,17 +101,34 @@ class PDFServiceIMSS:
                     )
                 )
 
-        except ValueError as ve:
-        # Capturar errores de valor específico
-            return PDFResponseDTO(
-                errorResponse=ErrorResponse(
-                    status=400,
-                    error='Bad request',
-                    mensaje=str(ve)
+
+        except Exception as e:
+            if "403" in str(e):
+                return PDFResponseDTO(
+                    errorResponse=ErrorResponse(
+                        status=403,
+                        error="Acceso denegado",
+                        mensaje="No se pudo acceder al archivo. Verifica que el enlace sea válido y tenga permisos de acceso."
+                    )
                 )
-            )
-        
-        
+            elif "404" in str(e):
+                return PDFResponseDTO(
+                    errorResponse=ErrorResponse(
+                        status=404,
+                        error="Archivo no encontrado",
+                        mensaje="El archivo no existe. Verifica la URL proporcionada."
+                    )
+                )
+            else:
+                return PDFResponseDTO(
+                    errorResponse=ErrorResponse(
+                        status=500,
+                        error="Internal Server Error",
+                        mensaje=f"Error inesperado: {str(e)}"
+                    )
+                )
+
+
         except Exception as e:
             # Capturar cualquier otra excepción
             return PDFResponseDTO(
@@ -115,6 +140,5 @@ class PDFServiceIMSS:
             )
 
         finally:
-            # Eliminar el archivo temporal
-            if os.path.exists(temp_file_path):
+            if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)

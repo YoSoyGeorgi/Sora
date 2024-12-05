@@ -1,27 +1,35 @@
 import requests
 from io import BytesIO
 from urllib.parse import urlparse, unquote
+from requests.exceptions import HTTPError
 
 class PDFDAO:
     @staticmethod
     def download_pdf(url: str):
         try:
-            # Descarga el PDF desde el enlace AWS
+            # Descarga el archivo desde la URL
             response = requests.get(url)
-            response.raise_for_status()  # Asegúrate de que no haya errores en la solicitud
+            response.raise_for_status()  # Lanza HTTPError para códigos 4xx y 5xx
 
-            # Intenta obtener el nombre del archivo desde el encabezado Content-Disposition
+            # Extraer nombre del archivo desde el encabezado o URL
             filename = PDFDAO.extract_filename(response)
-            
-            # Si no hay nombre en el encabezado, intenta obtenerlo desde la URL
             if not filename:
                 filename = PDFDAO.extract_filename_from_url(url)
 
-            # Retorna el contenido del PDF como un objeto BytesIO y el nombre del archivo
             return BytesIO(response.content), filename
-        except requests.RequestException as e:
-            raise Exception(f"Failed to download PDF: {str(e)}")
 
+        except HTTPError as e:
+            if e.response.status_code == 403:
+                raise Exception("El archivo no es accesible. Código de estado: 403 (Forbidden)")
+            elif e.response.status_code == 404:
+                raise Exception("El archivo no se encontró. Código de estado: 404 (Not Found)")
+            else:
+                raise Exception(f"Error HTTP al descargar el archivo: {e}")
+
+        except Exception as e:
+            raise Exception(f"Error al descargar el archivo: {str(e)}")
+        
+        
     @staticmethod
     def extract_filename(response):
         # Busca el encabezado Content-Disposition
